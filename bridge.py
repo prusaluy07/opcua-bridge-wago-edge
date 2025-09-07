@@ -2,6 +2,7 @@ import os
 import requests
 import sqlite3
 import time
+import random
 from datetime import datetime
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +20,7 @@ logging.basicConfig(
 # -----------------------------
 ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://anythingllm:3001")
 API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "changeme")
-WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "default")
+WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "wago-edge-copilot")
 
 DB_FILE = "data/errors.db"
 
@@ -85,7 +86,7 @@ def send_to_chat(machine, code, description):
     headers = {"Authorization": f"Bearer {API_KEY}"}
     message = {
         "message": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "conversation": f"{machine}-errors"
+        "conversation": "general"
     }
     try:
         r = requests.post(url, headers=headers, json=message, timeout=10)
@@ -107,15 +108,23 @@ def check_api_health():
         logging.error("❌ API nicht erreichbar: %s", e)
 
 # -----------------------------
-# Simulierter OPC/AnyViz Input
+# Fehlergenerator
 # -----------------------------
-def get_new_errors():
-    # Später echte OPC UA / AnyViz Integration
-    return [
-        ("Station-3", "4711", "Hydraulikdruck zu niedrig"),
-        ("Station-5", "1023", "Not-Aus ausgelöst"), 
-        ("Station-7", "2025", "Öldruck niedrig"),  # neue Fehler hinzufügen
-    ]
+MACHINES = ["Station-1", "Station-2", "Station-3", "Station-4", "Station-5"]
+ERROR_CODES = [
+    ("1001", "Hydraulikdruck zu niedrig"),
+    ("1002", "Öldruck niedrig"),
+    ("1003", "Not-Aus ausgelöst"),
+    ("1004", "Temperatur zu hoch"),
+    ("1005", "Sensorfehler")
+]
+
+def generate_new_error():
+    while True:
+        machine = random.choice(MACHINES)
+        code, description = random.choice(ERROR_CODES)
+        if not already_exists(machine, code, description):
+            return machine, code, description
 
 # -----------------------------
 # Main Loop
@@ -128,16 +137,11 @@ def main():
     executor = ThreadPoolExecutor(max_workers=4)
 
     while True:
-        errors = get_new_errors()
-        for machine, code, description in errors:
-            if not already_exists(machine, code, description):
-                save_error(machine, code, description)
-                # Parallel senden
-                executor.submit(send_to_documents, machine, code, description)
-                executor.submit(send_to_chat, machine, code, description)
-            else:
-                logging.info("⚠️ Fehler %s von %s heute schon gespeichert – übersprungen.", code, machine)
-
+        machine, code, description = generate_new_error()
+        save_error(machine, code, description)
+        executor.submit(send_to_documents, machine, code, description)
+        executor.submit(send_to_chat, machine, code, description)
+        logging.info("🆕 Neuer Fehler generiert: %s %s - %s", machine, code, description)
         time.sleep(60)
 
 if __name__ == "__main__":
