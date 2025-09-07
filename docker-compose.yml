@@ -6,7 +6,7 @@ services:
     container_name: opcua-bridge
     restart: always
     environment:
-      ANYTHINGLLM_URL: "http://anythingllm:3001"
+      ANYTHINGLLM_URL: "http://172.18.0.1:3001"
       ANYTHINGLLM_API_KEY: "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N"
       ANYTHINGLLM_WORKSPACE: "default"
     volumes:
