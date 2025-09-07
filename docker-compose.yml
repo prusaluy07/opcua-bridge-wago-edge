@@ -11,4 +11,8 @@ services:
       ANYTHINGLLM_WORKSPACE: "default"
     volumes:
       - ./data:/app/data
+      errors_data:
+        driver: local
     command: ["python", "bridge.py"]
+  
+
