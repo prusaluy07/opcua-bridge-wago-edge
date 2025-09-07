@@ -10,9 +10,9 @@ services:
       ANYTHINGLLM_API_KEY: "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N"
       ANYTHINGLLM_WORKSPACE: "default"
     volumes:
-      - ./data:/app/data
-      errors_data:
-        driver: local
+      - errors_data:/app/data
     command: ["python", "bridge.py"]
-  
 
+volumes:
+  errors_data:
+    driver: local
