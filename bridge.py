@@ -113,7 +113,8 @@ def get_new_errors():
     # Später echte OPC UA / AnyViz Integration
     return [
         ("Station-3", "4711", "Hydraulikdruck zu niedrig"),
-        ("Station-5", "1023", "Not-Aus ausgelöst"),
+        ("Station-5", "1023", "Not-Aus ausgelöst"), 
+        ("Station-7", "2025", "Öldruck niedrig"),  # neue Fehler hinzufügen
     ]
 
 # -----------------------------
