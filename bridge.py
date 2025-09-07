@@ -16,11 +16,11 @@ logging.basicConfig(
 )
 
 # -----------------------------
-# Konfiguration (ENV Variablen)
+# Konfiguration
 # -----------------------------
-ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://172.18.0.1:3001")
+ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://anythingllm:3001")
 API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N")
-WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "Wago EDGE Copilot")
+WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "wago-edge-copilot")
 
 DB_FILE = "data/errors.db"
 
@@ -73,7 +73,7 @@ def send_to_documents(machine, code, description):
     doc = {
         "title": f"{machine} Fehler {code}",
         "content": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "tags": [machine, "fehler", code]
+        "tags": ["Fehler", machine, code]  # einfache Tags, sichtbar
     }
     try:
         r = requests.post(url, headers=headers, json=doc, timeout=10)
@@ -86,7 +86,7 @@ def send_to_chat(machine, code, description):
     headers = {"Authorization": f"Bearer {API_KEY}"}
     message = {
         "message": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "conversation": "general"
+        "conversation": "general"  # sichtbar in Haupt-Thread
     }
     try:
         r = requests.post(url, headers=headers, json=message, timeout=10)
@@ -120,6 +120,7 @@ ERROR_CODES = [
 ]
 
 def generate_new_error():
+    """Generiert einen Fehler, der heute noch nicht existiert"""
     while True:
         machine = random.choice(MACHINES)
         code, description = random.choice(ERROR_CODES)
@@ -142,7 +143,7 @@ def main():
         executor.submit(send_to_documents, machine, code, description)
         executor.submit(send_to_chat, machine, code, description)
         logging.info("🆕 Neuer Fehler generiert: %s %s - %s", machine, code, description)
-        time.sleep(60)
+        time.sleep(60)  # alle 60 Sekunden ein neuer Fehler
 
 if __name__ == "__main__":
     main()
