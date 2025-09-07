@@ -18,10 +18,9 @@ logging.basicConfig(
 # -----------------------------
 # Konfiguration
 # -----------------------------
-ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://anythingllm:3001")
+ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://172.18.0.1:3001")  # geänderte IP
 API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N")
 WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "wago-edge-copilot")
-
 DB_FILE = "data/errors.db"
 
 # -----------------------------
@@ -73,7 +72,7 @@ def send_to_documents(machine, code, description):
     doc = {
         "title": f"{machine} Fehler {code}",
         "content": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "tags": ["Fehler", machine, code]  # einfache Tags, sichtbar
+        "tags": ["Fehler", machine, code]  # sichtbar ohne Filterprobleme
     }
     try:
         r = requests.post(url, headers=headers, json=doc, timeout=10)
@@ -86,7 +85,7 @@ def send_to_chat(machine, code, description):
     headers = {"Authorization": f"Bearer {API_KEY}"}
     message = {
         "message": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "conversation": "general"  # sichtbar in Haupt-Thread
+        "conversation": "Live Fehler"  # **sichtbarer Thread für alle neuen Fehler**
     }
     try:
         r = requests.post(url, headers=headers, json=message, timeout=10)
