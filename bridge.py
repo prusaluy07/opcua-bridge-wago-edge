@@ -1,31 +1,25 @@
 import os
-import requests
 import sqlite3
 import time
 import random
 from datetime import datetime
-import logging
-from concurrent.futures import ThreadPoolExecutor
-
-# -----------------------------
-# Logging Setup
-# -----------------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
+import requests
 
 # -----------------------------
 # Konfiguration
 # -----------------------------
-ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://anythingllm:3001")
+ANYTHINGLLM_IP = os.getenv("ANYTHINGLLM_IP", "172.20.0.2")  # interne Container-IP
+ANYTHINGLLM_PORT = os.getenv("ANYTHINGLLM_PORT", "3001")
 API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N")
 WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "wago-edge-copilot")
+CHAT_THREAD = os.getenv("ANYTHINGLLM_THREAD", "0c4ae3fa-a7ff-4c1d-b240-6f9ef4327a01")
 
 DB_FILE = "data/errors.db"
 
+BASE_URL = f"http://{ANYTHINGLLM_IP}:{ANYTHINGLLM_PORT}/api/v1/workspaces/{WORKSPACE}"
+
 # -----------------------------
-# DB Setup
+# SQLite Setup
 # -----------------------------
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -33,8 +27,8 @@ def init_db():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS errors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            machine TEXT,
             code TEXT,
+            machine TEXT,
             description TEXT,
             timestamp TEXT
         )
@@ -42,108 +36,98 @@ def init_db():
     conn.commit()
     conn.close()
 
-def already_exists(machine, code, description):
+def already_exists(code, machine, description):
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("""
         SELECT 1 FROM errors 
-        WHERE machine=? AND code=? AND description=? 
+        WHERE code=? AND machine=? AND description=?
         AND DATE(timestamp)=DATE('now')
-    """, (machine, code, description))
+    """, (code, machine, description))
     exists = cur.fetchone() is not None
     conn.close()
     return exists
 
-def save_error(machine, code, description):
+def save_error(code, machine, description):
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO errors (machine, code, description, timestamp)
+        INSERT INTO errors (code, machine, description, timestamp)
         VALUES (?, ?, ?, ?)
-    """, (machine, code, description, datetime.now().isoformat()))
+    """, (code, machine, description, datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
 # -----------------------------
 # AnythingLLM API
 # -----------------------------
+def send_to_chat(machine, code, description):
+    url = f"{BASE_URL}/chat"
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    payload = {
+        "message": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
+        "conversation": CHAT_THREAD
+    }
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        if r.headers.get("Content-Type", "").startswith("application/json"):
+            print("Chat:", r.status_code, r.json())
+        else:
+            print("Chat:", r.status_code, "HTML erhalten, Nachricht gesendet?")
+    except Exception as e:
+        print("Fehler beim Senden an Chat:", e)
+
 def send_to_documents(machine, code, description):
-    url = f"{ANYTHINGLLM_URL}/api/v1/workspaces/{WORKSPACE}/documents"
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    doc = {
+    url = f"{BASE_URL}/documents"
+    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    payload = {
         "title": f"{machine} Fehler {code}",
         "content": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "tags": ["Fehler", machine, code]  # einfache Tags, sichtbar
+        "tags": [machine, "fehler", code]
     }
     try:
-        r = requests.post(url, headers=headers, json=doc, timeout=10)
-        logging.info("Doc upload: %s (%s)", r.status_code, doc["title"])
-    except Exception as e:
-        logging.error("Fehler beim Senden an Documents: %s", e)
-
-def send_to_chat(machine, code, description):
-    url = f"{ANYTHINGLLM_URL}/api/v1/workspaces/{WORKSPACE}/chat"
-    headers = {"Authorization": f"Bearer {API_KEY}"}
-    message = {
-        "message": f"{datetime.now().isoformat()} - {machine} meldet Fehler {code}: {description}",
-        "conversation": "general"  # sichtbar in Haupt-Thread
-    }
-    try:
-        r = requests.post(url, headers=headers, json=message, timeout=10)
-        logging.info("Chat message: %s (%s)", r.status_code, message["conversation"])
-    except Exception as e:
-        logging.error("Fehler beim Senden an Chat: %s", e)
-
-# -----------------------------
-# Health Check
-# -----------------------------
-def check_api_health():
-    try:
-        r = requests.get(f"{ANYTHINGLLM_URL}/api/v1/health", timeout=5)
-        if r.status_code == 200:
-            logging.info("✅ AnythingLLM API erreichbar")
+        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        if r.headers.get("Content-Type", "").startswith("application/json"):
+            print("Doc:", r.status_code, r.json())
         else:
-            logging.warning("⚠️ AnythingLLM API antwortet mit Status: %s", r.status_code)
+            print("Doc:", r.status_code, "HTML erhalten, Dokument evtl. erstellt?")
     except Exception as e:
-        logging.error("❌ API nicht erreichbar: %s", e)
+        print("Fehler beim Senden an Documents:", e)
 
 # -----------------------------
-# Fehlergenerator
+# Neue Fehler simulieren
 # -----------------------------
-MACHINES = ["Station-1", "Station-2", "Station-3", "Station-4", "Station-5"]
-ERROR_CODES = [
-    ("1001", "Hydraulikdruck zu niedrig"),
-    ("1002", "Öldruck niedrig"),
-    ("1003", "Not-Aus ausgelöst"),
-    ("1004", "Temperatur zu hoch"),
-    ("1005", "Sensorfehler")
+MACHINES = ["Station-1", "Station-2", "Station-3", "Station-4"]
+ERROR_CODES = ["1001", "1002", "4711", "1023"]
+ERROR_DESC = [
+    "Hydraulikdruck zu niedrig",
+    "Not-Aus ausgelöst",
+    "Sensor defekt",
+    "Temperatur überschritten"
 ]
 
-def generate_new_error():
-    """Generiert einen Fehler, der heute noch nicht existiert"""
-    while True:
-        machine = random.choice(MACHINES)
-        code, description = random.choice(ERROR_CODES)
-        if not already_exists(machine, code, description):
-            return machine, code, description
+def generate_error():
+    machine = random.choice(MACHINES)
+    code = random.choice(ERROR_CODES)
+    description = random.choice(ERROR_DESC)
+    return machine, code, description
 
 # -----------------------------
 # Main Loop
 # -----------------------------
 def main():
     init_db()
-    check_api_health()
-    logging.info("🚀 OPC-UA Bridge gestartet. Warte auf Meldungen...")
-
-    executor = ThreadPoolExecutor(max_workers=4)
+    print("🚀 OPC-UA Bridge mit AnythingLLM gestartet...")
 
     while True:
-        machine, code, description = generate_new_error()
-        save_error(machine, code, description)
-        executor.submit(send_to_documents, machine, code, description)
-        executor.submit(send_to_chat, machine, code, description)
-        logging.info("🆕 Neuer Fehler generiert: %s %s - %s", machine, code, description)
-        time.sleep(60)  # alle 60 Sekunden ein neuer Fehler
+        machine, code, description = generate_error()
+        if not already_exists(code, machine, description):
+            save_error(code, machine, description)
+            send_to_documents(machine, code, description)
+            send_to_chat(machine, code, description)
+        else:
+            print(f"⚠️ Fehler {code} von {machine} heute schon gespeichert – übersprungen.")
+        time.sleep(60)  # alle 60 Sekunden
 
 if __name__ == "__main__":
     main()
