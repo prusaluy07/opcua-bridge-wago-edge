@@ -20,7 +20,7 @@ logging.basicConfig(
 # -----------------------------
 ANYTHINGLLM_URL = os.getenv("ANYTHINGLLM_URL", "http://172.18.0.1:3001")
 API_KEY = os.getenv("ANYTHINGLLM_API_KEY", "KE7053N-30JM5PZ-KAPMXDP-KXJQC3N")
-WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "wago edge copilot")
+WORKSPACE = os.getenv("ANYTHINGLLM_WORKSPACE", "Wago EDGE Copilot")
 
 DB_FILE = "data/errors.db"
 
